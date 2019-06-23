@@ -3,6 +3,9 @@
 use Slim\App;
 use Clases\UsuarioApi;
 
+use Middlewares\PerfilMW;
+use Middlewares\TokenMW;
+
 return function (App $app) {
     $container = $app->getContainer();
 
@@ -34,5 +37,14 @@ return function (App $app) {
     // Registration Controller
     $container['UsuarioApi'] = function($c) {
         return new UsuarioApi($c->get('logger'));
+    };
+
+    // Registration MW
+    $container['PerfilMW'] = function() {
+        return new PerfilMW();
+    };
+
+    $container['TokenMW'] = function() {
+        return new TokenMW();
     };
 };

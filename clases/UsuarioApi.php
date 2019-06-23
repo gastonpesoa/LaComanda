@@ -3,124 +3,246 @@ namespace Clases;
 use App\Models\Usuario;
 
 class UsuarioApi
-{ 
+{
     protected $logger;
-    
-    public function __construct(\Monolog\Logger $logger) {
+
+    public function __construct(\Monolog\Logger $logger)
+    {
         $this->logger = $logger;
+    }
+
+    public static function GetUserByUsername($username)
+    {
+        $userORM = new Usuario();
+        return $userORM->where('username', "=", $username)->first();
     }
 
     public function LoginUser($request, $response, $args)
     {
-        $params = $request->getParsedBody();
-        $userName = $params["user"];
-        $userPass = $params["password"];
-
-        $userORM = new Usuario();        
-        $respuesta = $userORM->where('nombre', "=", $userName)->first();         
-        
-        if (password_verify(trim($userPass), $respuesta->clave)) 
+        $data = $request->getParsedBody();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Son requeridos nombre y clave de usuario");
+        if(isset($data['username']) && isset($data['password']))
         {
-            if ($respuesta["tipo"] != "") 
+            $username = filter_var(trim($data['username']), FILTER_SANITIZE_STRING);
+            $password = filter_var(trim($data['password']), FILTER_SANITIZE_STRING);
+
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario o clave incorrectos. Tu puedes Bruce!");
+            if($username && $password)
             {
-                $token = Token::CreateToken($respuestaPass);
-                $this->logger->addInfo('User login'.$respuestaPass);             
-                $respuesta = array("Estado" => "OK", "Mensaje" => "Logueado exitosamente.", "Token" => $token, "Nombre_Empleado" => $retorno["nombre_empleado"]);            
-            } 
-            else 
-            {
-                $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario o clave invalidos.");
+                $usuario = UsuarioApi::GetUserByUsername($username);
+                if($usuario && $usuario->estado != -1)
+                {
+                    if (password_verify(trim($password), $usuario->clave))
+                    {
+                        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario suspendido");
+                        if($usuario->estado == 1)
+                        {
+                            $fecha = date('Y-m-d H:i:s');
+                            $usuario->fecha_ultimo_login = $fecha;
+                            $usuario->save();
+                            $token = Token::CreateToken($usuario);
+                            $this->logger->addInfo('User login'.$data);
+                            $respuesta = array("Estado" => "OK", "Mensaje" => "Bienvenid@ " . $usuario->nombre . "!", "Token" => $token);
+                            $status = 200;
+                        }
+                    }
+                }
             }
-        } 
-        else 
-        {
-            echo 'Invalid password.';
-        }            
-
-        $newResponse = $response->withJson($respuesta, 200);
-        return $newResponse;
+        }
+        return $response->withJson($respuesta, $status);
     }
 
-    public function GetAll($request, $response, $args)
-    {     
-        $this->logger->addInfo('User list'); 
-        $userORM = new Usuario();        
-        $params = $request->getQueryParams();   
-        $badRequest = true;     
+    public function InsertUser($request, $response, $args)
+    {
+        $this->logger->addInfo('New user');
+        $data = $request->getParsedBody();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Son requeridos nombre de usuario, nombre, clave y perfil");
+        if(isset($data['username']) && isset($data['nombre']) && isset($data['password']) && isset($data['perfil']))
+        {
+            $nombre = filter_var(trim($data['nombre']), FILTER_SANITIZE_STRING);
+            $clave = filter_var(trim($data['password']), FILTER_SANITIZE_STRING);
+            $username = filter_var(trim($data['username']), FILTER_SANITIZE_STRING);
+            $perfil = filter_var(trim($data['perfil']), FILTER_SANITIZE_STRING);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Valores no permitidos");
+            if($nombre && $clave && $username && $perfil)
+            {
+                $respuesta = array("Estado" => "ERROR", "Mensaje" => "El perfil debe ser bartender, cervecero, cocinero, mozo o socio");
+                if( strcasecmp($perfil, 'bartender') == 0 ||
+                    strcasecmp($perfil, 'cervecero') == 0 ||
+                    strcasecmp($perfil, 'cocinero') == 0 ||
+                    strcasecmp($perfil, 'mozo') == 0 ||
+                    strcasecmp($perfil, 'socio') == 0)
+                {
+                    $respuesta = array("Estado" => "ERROR", "Mensaje" => "Ya existe usuario registrado con nombre de usuario ".$username);
+                    $userExist = UsuarioApi::GetUserByUsername($username);
+                    if($userExist == null || $userExist->estado = -1)
+                    {
+                        $user = new Usuario();
+                        $user->fecha_registro = date('Y-m-d H:i:s');
+                        $user->estado = 1;
+                        $user->username = $username;
+                        $user->nombre = $nombre;
+                        $user->clave = password_hash($clave, PASSWORD_DEFAULT);
+                        $user->tipo = $perfil;
+                        $user->save();
+                        $respuesta = array("Estado" => "OK", "Mensaje" => "Usuario, ".$username." registrado");
+                        $status = 200;
+                    }
+                }
+            }
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public function UpdateUser($request, $response, $args)
+    {
+        $this->logger->addInfo('Update user');
+        $data = $request->getParsedBody();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Es requerido id de usuario");
+        if(isset($data['id']))
+        {
+            $id = $data['id'];
+            if(isset($data['nombre']))
+                $nombre = filter_var(trim($data['nombre']), FILTER_SANITIZE_STRING);
+            if(isset($data['password']))
+                $clave = filter_var(trim($data['password']), FILTER_SANITIZE_STRING);
+            if(isset($data['username']))
+                $username = filter_var(trim($data['username']), FILTER_SANITIZE_STRING);
+            if(isset($data['perfil']))
+                $perfil = filter_var(trim($data['perfil']), FILTER_SANITIZE_STRING);
+
+            $userOrm = new Usuario();
+            $user = $userOrm->find($id);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "No existe usuario registrado con id de usuario ".$id);
+            if($user != null)
+            {
+                if($username)
+                    $user->username = $username;
+                if($nombre)
+                    $user->nombre = $nombre;
+                if($clave)
+                    $user->clave = password_hash($clave, PASSWORD_DEFAULT);
+                if($perfil)
+                {
+                    if( strcasecmp($perfil, 'bartender') == 0 ||
+                        strcasecmp($perfil, 'cervecero') == 0 ||
+                        strcasecmp($perfil, 'cocinero') == 0 ||
+                        strcasecmp($perfil, 'mozo') == 0 ||
+                        strcasecmp($perfil, 'socio') == 0)
+                    {
+                        $user->tipo = $perfil;
+                    }
+                }
+                $user->save();
+                $respuesta = array("Estado" => "OK", "Mensaje" => "Usuario, ".$username." modificado");
+                $status = 200;
+            }
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public function DeleteUser($request, $response, $args)
+    {
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Es requerido el id del usuario");
+        if(isset($args['id']))
+        {
+            $id = $args['id'];
+            $userOrm = new Usuario();
+            $user = $userOrm->find($id);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "No existe usuario con id ".$id);
+            if($user)
+            {
+                $user->estado = -1;
+                $user->save();
+                $status = 200;
+                $respuesta = array("Estado" => "OK", "Mensaje" => "Usuario id: ".$id." eliminado");
+            }
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public function SuspenderUser($request, $response, $args)
+    {
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Es requerido el id del usuario");
+        if(isset($args['id']))
+        {
+            $id = $args['id'];
+            $userOrm = new Usuario();
+            $user = $userOrm->find($id);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "No existe usuario con id ".$id);
+            if($user)
+            {
+                $user->estado = 0;
+                $user->save();
+                $status = 200;
+                $respuesta = array("Estado" => "OK", "Mensaje" => "Usuario id: ".$id." suspendido");
+            }
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public function GetAllUsers($request, $response, $args)
+    {
+        $this->logger->addInfo('User list');
+        $userORM = new Usuario();
+        $params = $request->getParsedBody();
 
         if (!isset($params['sort']) && !isset($params['order']))
-        {
-            $users = $userORM::all();        
-            $result = $response->withStatus(200)->getBody()->write($users->toJson());  
-            $badRequest = false;  
-        } 
-        else 
+            $users = UsuarioApi::ShowUsuariosArray($userORM::all());
+        else
         {
             if (isset($params['sort']) && isset($params['order']))
             {
                 if (strcasecmp($params['sort'],'nombre') == 0)
                 {
                     if (strcasecmp($params['order'],'desc') == 0)
-                    {
-                        $users = $userORM::orderBy('nombre', 'desc')->get();
-                        $result = $response->withStatus(200)->getBody()->write($users->toJson());  
-                        $badRequest = false;  
-                    } 
-                    else 
-                    {
+                        $users = UsuarioApi::ShowUsuariosArray($userORM::orderBy('nombre', 'desc')->get());
+                    else
                         if (strcasecmp($params['order'],'asc') == 0)
-                        {
-                            $users = $userORM::orderBy('nombre', 'asc')->get();
-                            $result = $response->withStatus(200)->getBody()->write($users->toJson());    
-                            $badRequest = false;
-                        }                     
-                    }
+                            $users = UsuarioApi::ShowUsuariosArray($userORM::orderBy('nombre', 'asc')->get());
                 }
-            }    
-        }  
-
-        if($badRequest)
-            $result = $response->withStatus(400)->getBody()->write('Bad Request');
-
-        return $result;
-    }
-
-    public function GetById($request, $response, $args)
-    {
-        $this->logger->addInfo('User by id'); 
-        $userId = (int)$args['id'];
-        $userORM = new Usuario();    
-        $user = $userORM->find($userId);
-        return $response->withStatus(200)->getBody()->write($user->toJson());    
-    }
-
-    public function RegisterUser($request, $response)
-    {
-        $this->logger->addInfo('New user'); 
-        $data = $request->getParsedBody();
-        $badRequest = true;   
-
-        if(isset($data['user']) && isset($data['password']) && isset($data['tipo']))
-        {
-            $nombre = filter_var(trim($data['user']), FILTER_SANITIZE_STRING);
-            $pass = filter_var(trim($data['password']), FILTER_SANITIZE_STRING);     
-            $tipo = filter_var(trim($data['tipo']), FILTER_SANITIZE_STRING);     
-            
-            if($nombre && $pass && $tipo)
-            {
-                $user = new Usuario();        
-                $user->nombre = $nombre;
-                $user->clave = password_hash($pass, PASSWORD_DEFAULT);
-                $user->tipo = $tipo;
-                $user->save();
-                $result = $response->withStatus(200)->getBody()->write($user->toJson());   
-                $badRequest = false; 
-            }               
+            }
         }
+        return $response->withJson($users, 200);
+    }
 
-        if($badRequest)
-            $result = $response->withStatus(400)->getBody()->write('Bad Request');
-
+    public static function ShowUsuariosArray($array)
+    {
+        $result = array();
+        if(!is_null($array) && count($array) > 0)
+        {
+            foreach($array as $user)
+            {
+                switch ($user->estado)
+                {
+                    case 1:
+                        $estado = "activo";
+                        break;
+                    case 0:
+                        $estado = "suspendido";
+                        break;
+                    case -1:
+                        $estado = "inactivo";
+                        break;
+                }
+                $element = array(
+                    "id" => $user->id,
+                    "username" => $user->username,
+                    "nombre" => $user->nombre,
+                    "perfil" => $user->tipo,
+                    "fecha_registro" => $user->fecha_registro,
+                    "ultimo_login" => $user->fecha_ultimo_login,
+                    "cantidad_de_operaciones" => $user->cantidad_operaciones,
+                    "estado" => $estado
+                );
+                array_push($result, $element);
+            }
+        }
         return $result;
     }
 }

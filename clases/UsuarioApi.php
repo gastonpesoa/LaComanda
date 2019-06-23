@@ -1,6 +1,8 @@
 <?php
 namespace Clases;
 use App\Models\Usuario;
+use App\Models\Login;
+use \DateTime;
 
 class UsuarioApi
 {
@@ -27,7 +29,7 @@ class UsuarioApi
             $username = filter_var(trim($data['username']), FILTER_SANITIZE_STRING);
             $password = filter_var(trim($data['password']), FILTER_SANITIZE_STRING);
 
-            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario o clave incorrectos. Tu puedes Bruce!");
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario o clave incorrectos. Tu no puedes Bruce!");
             if($username && $password)
             {
                 $usuario = UsuarioApi::GetUserByUsername($username);
@@ -244,6 +246,65 @@ class UsuarioApi
             }
         }
         return $result;
+    }
+
+    public function GetEntrysBetweenDates($request, $response, $args)
+    {
+        $data = $request->getQueryParams();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere fecha desde y fecha hasta en formato Y-m-d H:i:s");
+        if(isset($data['desde']) && isset($data['hasta']))
+        {
+            $fechaDesde = new DateTime($data['desde']);
+            $fechaHasta = new DateTime($data['hasta']);
+            $logsOrm = new Login();
+            $respuesta = $logsOrm->where([
+                ['fecha', '>', $fechaDesde],
+                ['fecha', '<', $fechaHasta]
+                ])->get();
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public function GetAllOperationsBySector($request, $response, $args)
+    {
+        $cantidadOperaciones = 0;
+        $data = $request->getQueryParams();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere sector, fecha desde y fecha hasta en formato Y-m-d H:i:s");
+        if(isset($data['sector']) && isset($data['desde']) && isset($data['hasta']))
+        {
+            $perfil = $data['sector'];
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "El sector debe ser bartender, cervecero, cocinero, mozo o socio");
+            if( strcasecmp($perfil, 'bartender') == 0 ||
+                strcasecmp($perfil, 'cervecero') == 0 ||
+                strcasecmp($perfil, 'cocinero') == 0 ||
+                strcasecmp($perfil, 'mozo') == 0 ||
+                strcasecmp($perfil, 'socio') == 0 )
+            {
+                $fechaDesde = new DateTime($data['desde']);
+                $fechaHasta = new DateTime($data['hasta']);
+                $logsORM = new Login();
+                $listaEnFecha = $logsORM->where([
+                    ['fecha', '>', $fechaDesde],
+                    ['fecha', '<', $fechaHasta]
+                    ])->get();
+                $userORM = new Usuario();
+                foreach($listaEnFecha as $logs)
+                {
+                    if(stristr($logs->ruta, 'login') === FALSE && stristr($logs->ruta, 'usuario') === FALSE)
+                    {
+                        $user = $userORM->find($logs->idUser);
+                        if(strcasecmp($user->tipo, $perfil) == 0)
+                        {
+                            $cantidadOperaciones++;
+                        }
+                    }
+                }
+                $respuesta = $cantidadOperaciones;
+            }
+        }
+        return $response->withJson($respuesta, $status);
     }
 }
 

@@ -11,11 +11,12 @@ return function (App $app)
     $app->post('/login', \UsuarioApi::class . ':LoginUser');
 
     $app->group('/usuario', function() use ($container){
-        $this->post('/new', \UsuarioApi::class . ':InsertUser')->add(\PerfilMW::class . ':ValidarAdmin');
-        $this->post('/update', \UsuarioApi::class . ':UpdateUser')->add(\PerfilMW::class . ':ValidarAdmin');
-        $this->post('/delete/{id}', \UsuarioApi::class . ':DeleteUser')->add(\PerfilMW::class . ':ValidarAdmin');
-        $this->post('/suspender/{id}', \UsuarioApi::class . ':SuspenderUser')->add(\PerfilMW::class . ':ValidarAdmin');
-        $this->get('/', \UsuarioApi::class . ':GetAllUsers')->add(\PerfilMW::class . ':ValidarAdmin');
-        $this->get('/{id}', \UsuarioApi::class . ':GetById');
-    })->add(\TokenMW::class . ':VerificarToken');
+        $this->post('/new', \UsuarioApi::class . ':InsertUser');
+        $this->post('/update', \UsuarioApi::class . ':UpdateUser');
+        $this->post('/delete/{id}', \UsuarioApi::class . ':DeleteUser');
+        $this->post('/suspender/{id}', \UsuarioApi::class . ':SuspenderUser');
+        $this->get('/', \UsuarioApi::class . ':GetAllUsers');
+        $this->get('/entradasEntreFechas', \UsuarioApi::class . ':GetEntrysBetweenDates');
+        $this->get('/operacionesPorSectorEntreFechas', \UsuarioApi::class . ':GetAllOperationsBySector');
+    })->add(\PerfilMW::class . ':ValidarAdmin')->add(\TokenMW::class . ':VerificarToken');
 };

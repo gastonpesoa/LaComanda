@@ -5,6 +5,8 @@ use Clases\UsuarioApi;
 
 use Middlewares\PerfilMW;
 use Middlewares\TokenMW;
+use Middlewares\RegisterEntryMW;
+use Middlewares\OperacionesMW;
 
 return function (App $app) {
     $container = $app->getContainer();
@@ -46,5 +48,13 @@ return function (App $app) {
 
     $container['TokenMW'] = function() {
         return new TokenMW();
+    };
+
+    $container['RegisterEntryMW'] = function() {
+        return new RegisterEntryMW();
+    };
+
+    $container['OperacionesMW'] = function() {
+        return new OperacionesMW();
     };
 };

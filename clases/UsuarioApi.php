@@ -19,6 +19,26 @@ class UsuarioApi
         return $userORM->where('username', "=", $username)->first();
     }
 
+    public static function GetUserSector($idUser)
+    {
+        $userORM = new Usuario();
+        $user = $userORM->find($idUser);
+        return $user->tipo;
+    }
+
+    public static function GetUserOperaciones($idUser)
+    {
+        $userORM = new Usuario();
+        $user = $userORM->find($idUser);
+        return $user->cantidad_operaciones;
+    }
+
+    public static function GetUserById($id)
+    {
+        $userORM = new Usuario();
+        return $userORM->find($id);
+    }
+
     public function LoginUser($request, $response, $args)
     {
         $data = $request->getParsedBody();
@@ -29,7 +49,7 @@ class UsuarioApi
             $username = filter_var(trim($data['username']), FILTER_SANITIZE_STRING);
             $password = filter_var(trim($data['password']), FILTER_SANITIZE_STRING);
 
-            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario o clave incorrectos. Tu no puedes Bruce!");
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Usuario o clave incorrectos");
             if($username && $password)
             {
                 $usuario = UsuarioApi::GetUserByUsername($username);
@@ -252,35 +272,51 @@ class UsuarioApi
     {
         $data = $request->getQueryParams();
         $status = 400;
-        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere fecha desde y fecha hasta en formato Y-m-d H:i:s");
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere fecha desde y fecha hasta en formato YYYY-mm-dd HH:ii");
         if(isset($data['desde']) && isset($data['hasta']))
         {
-            $fechaDesde = new DateTime($data['desde']);
-            $fechaHasta = new DateTime($data['hasta']);
-            $logsOrm = new Login();
-            $respuesta = $logsOrm->where([
-                ['fecha', '>', $fechaDesde],
-                ['fecha', '<', $fechaHasta]
-                ])->get();
+            $checkDesde = UsuarioApi::ValidateDateFormat($data['desde']);
+            $checkHasta = UsuarioApi::ValidateDateFormat($data['hasta']);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Formato de fecha requerido: YYYY-mm-dd HH:ii");
+            if($checkDesde && $checkHasta)
+            {
+                $fechaDesde = new DateTime($data['desde']);
+                $fechaHasta = new DateTime($data['hasta']);
+                $logsOrm = new Login();
+                $respuesta = $logsOrm->where([
+                    ['fecha', '>', $fechaDesde],
+                    ['fecha', '<', $fechaHasta]
+                    ])->get();
+            }
         }
         return $response->withJson($respuesta, $status);
     }
 
-    public function GetAllOperationsBySector($request, $response, $args)
+    public static function ValidateDateFormat($date)
     {
-        $cantidadOperaciones = 0;
+        if (preg_match("/^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1]) (2[0-3]|[01][0-9]):[0-5][0-9]$/",$date))
+            return true;
+        else
+            return false;
+    }
+
+    public function GetOperationsCountBySector($request, $response)
+    {
+        $cantOpSocio = 0;
+        $cantOpMozo = 0;
+        $cantOpCocinero = 0;
+        $cantOpBartender = 0;
+        $cantOpCervecero = 0;
+
         $data = $request->getQueryParams();
         $status = 400;
-        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere sector, fecha desde y fecha hasta en formato Y-m-d H:i:s");
-        if(isset($data['sector']) && isset($data['desde']) && isset($data['hasta']))
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere fecha desde y fecha hasta en formato YYYY-mm-dd HH:ii");
+        if(isset($data['desde']) && isset($data['hasta']))
         {
-            $perfil = $data['sector'];
-            $respuesta = array("Estado" => "ERROR", "Mensaje" => "El sector debe ser bartender, cervecero, cocinero, mozo o socio");
-            if( strcasecmp($perfil, 'bartender') == 0 ||
-                strcasecmp($perfil, 'cervecero') == 0 ||
-                strcasecmp($perfil, 'cocinero') == 0 ||
-                strcasecmp($perfil, 'mozo') == 0 ||
-                strcasecmp($perfil, 'socio') == 0 )
+            $checkDesde = UsuarioApi::ValidateDateFormat($data['desde']);
+            $checkHasta = UsuarioApi::ValidateDateFormat($data['hasta']);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Formato de fecha requerido: YYYY-mm-dd HH:ii");
+            if($checkDesde && $checkHasta)
             {
                 $fechaDesde = new DateTime($data['desde']);
                 $fechaHasta = new DateTime($data['hasta']);
@@ -289,19 +325,158 @@ class UsuarioApi
                     ['fecha', '>', $fechaDesde],
                     ['fecha', '<', $fechaHasta]
                     ])->get();
-                $userORM = new Usuario();
+
                 foreach($listaEnFecha as $logs)
                 {
-                    if(stristr($logs->ruta, 'login') === FALSE && stristr($logs->ruta, 'usuario') === FALSE)
+                    // if(stristr($logs->ruta, 'login') === FALSE && stristr($logs->ruta, 'usuario') === FALSE)
+                    $userSector = UsuarioApi::GetUserSector($logs->idUser);
+                    switch($userSector)
                     {
-                        $user = $userORM->find($logs->idUser);
-                        if(strcasecmp($user->tipo, $perfil) == 0)
-                        {
-                            $cantidadOperaciones++;
-                        }
+                        case 'socio':
+                            $cantOpSocio++;
+                        break;
+                        case 'mozo':
+                            $cantOpMozo++;
+                        break;
+                        case 'cocinero':
+                            $cantOpCocinero++;
+                        break;
+                        case 'bartender':
+                            $cantOpBartender++;
+                            break;
+                        case 'cervecero':
+                            $cantOpCervecero++;
+                        break;
                     }
                 }
-                $respuesta = $cantidadOperaciones;
+                $respuesta = array("Estado" => "OK",
+                                    "Mensaje" => "Cantidad de operaciones por sector",
+                                    "Socio" => $cantOpSocio,
+                                    "Mozo" => $cantOpMozo,
+                                    "Cocinero" => $cantOpCocinero,
+                                    "Bartender" => $cantOpBartender,
+                                    "Cervecero" => $cantOpCervecero
+                                );
+                $status = 200;
+            }
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public static function GetFormatArrayUserOperacionesCount($array)
+    {
+        $return = array();
+        foreach($array as $user)
+        {
+            $element = array($user->nombre => $user->cantidad_operaciones);
+            array_push($return,$element);
+        }
+        return $return;
+    }
+
+    public function GetOperationsCountBySectorByEmpleado($request, $response)
+    {
+        $data = $request->getQueryParams();
+        $arrayIdUsers = array();
+        $arraySocios = array();
+        $arrayMozos = array();
+        $arrayCocineros = array();
+        $arrayBartenders = array();
+        $arrayCerveceros = array();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere fecha desde y fecha hasta en formato YYYY-mm-dd HH:ii");
+        if(isset($data['desde']) && isset($data['hasta']))
+        {
+            $checkDesde = UsuarioApi::ValidateDateFormat($data['desde']);
+            $checkHasta = UsuarioApi::ValidateDateFormat($data['hasta']);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Formato de fecha requerido: YYYY-mm-dd HH:ii");
+            if($checkDesde && $checkHasta)
+            {
+                $fechaDesde = new DateTime($data['desde']);
+                $fechaHasta = new DateTime($data['hasta']);
+                $logsORM = new Login();
+                $listaEnFecha = $logsORM->where([
+                    ['fecha', '>', $fechaDesde],
+                    ['fecha', '<', $fechaHasta]
+                    ])->get();
+
+                foreach($listaEnFecha as $logs){
+                    if(!in_array($logs->idUser, $arrayIdUsers))
+                        array_push($arrayIdUsers, $logs->idUser);
+                }
+
+                foreach($arrayIdUsers as $id){
+                    $user = UsuarioApi::GetUserById($id);
+                    switch($user->tipo){
+                        case 'socio':
+                            array_push($arraySocios,$user);
+                        break;
+                        case 'mozo':
+                            array_push($arrayMozos,$user);
+                        break;
+                        case 'cocinero':
+                            array_push($arrayCocineros,$user);
+                        break;
+                        case 'bartender':
+                            array_push($arrayBartenders,$user);
+                        break;
+                        case 'cervecero':
+                            array_push($arrayCerveceros,$user);
+                        break;
+                    }
+                }
+
+                $respuesta = array("Estado" => "OK",
+                                    "Mensaje" => "Cantidad de operaciones por sector por empleado",
+                                    "Socio" => UsuarioApi::GetFormatArrayUserOperacionesCount($arraySocios),
+                                    "Mozo" => UsuarioApi::GetFormatArrayUserOperacionesCount($arrayMozos),
+                                    "Cocinero" => UsuarioApi::GetFormatArrayUserOperacionesCount($arrayCocineros),
+                                    "Bartender" => UsuarioApi::GetFormatArrayUserOperacionesCount($arrayBartenders),
+                                    "Cervecero" => UsuarioApi::GetFormatArrayUserOperacionesCount($arrayCerveceros));
+                $status = 200;
+            }
+        }
+        return $response->withJson($respuesta, $status);
+    }
+
+    public function GetOperationsCountByEmpleado($request, $response)
+    {
+        $data = $request->getQueryParams();
+        $arrayIdUsers = array();
+        $arrayUsers = array();
+        $status = 400;
+        $respuesta = array("Estado" => "ERROR", "Mensaje" => "Se requiere fecha desde y fecha hasta en formato YYYY-mm-dd HH:ii");
+        if(isset($data['desde']) && isset($data['hasta']))
+        {
+            $checkDesde = UsuarioApi::ValidateDateFormat($data['desde']);
+            $checkHasta = UsuarioApi::ValidateDateFormat($data['hasta']);
+            $respuesta = array("Estado" => "ERROR", "Mensaje" => "Formato de fecha requerido: YYYY-mm-dd HH:ii");
+            if($checkDesde && $checkHasta)
+            {
+                $fechaDesde = new DateTime($data['desde']);
+                $fechaHasta = new DateTime($data['hasta']);
+                $logsORM = new Login();
+                $listaEnFecha = $logsORM->where([
+                    ['fecha', '>', $fechaDesde],
+                    ['fecha', '<', $fechaHasta]
+                    ])->get();
+
+                foreach($listaEnFecha as $logs){
+                    if(!in_array($logs->idUser, $arrayIdUsers)){
+                        array_push($arrayIdUsers, $logs->idUser);
+                    }
+                }
+
+                foreach($arrayIdUsers as $id){
+                    $user = UsuarioApi::GetUserById($id);
+                    if(strcasecmp($user->tipo, 'admin') !== 0)
+                        array_push($arrayUsers, $user);
+                }
+
+                $respuesta = array("Estado" => "OK",
+                                    "Mensaje" => "Cantidad de operaciones por empleado",
+                                    "Usuarios" => UsuarioApi::GetFormatArrayUserOperacionesCount($arrayUsers));
+                $status = 200;
             }
         }
         return $response->withJson($respuesta, $status);

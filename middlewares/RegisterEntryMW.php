@@ -47,7 +47,7 @@ class RegisterEntryMW
             }
             catch(\Exception $ex)
             {
-                $respuesta = array("Estado" => "ERROR", "Mensaje" => "Token invalido.", "Excepcion" => $ex->getMessage());
+                $respuesta = array("Estado" => "ERROR", "Mensaje" => $ex->getMessage());
             }
         }
         else{

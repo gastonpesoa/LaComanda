@@ -12,6 +12,8 @@ if (PHP_SAPI == 'cli-server') {
 ini_set('date.timezone', 'America/Argentina/Buenos_Aires');
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../reportes/FPDF/fpdf.php';
+require __DIR__ . '/../reportes/PHPExcel/Classes/PHPExcel.php';
 
 session_start();
 
